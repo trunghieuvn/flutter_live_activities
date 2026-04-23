@@ -1,4 +1,4 @@
-package com.example.live_activities
+package com.istornz.live_activities
 
 import android.os.Build
 import android.util.Log
@@ -14,9 +14,7 @@ class LiveActivityFirebaseMessagingService : FirebaseMessagingService() {
     private fun jsonDecode(json: String): Map<String, Any> {
         val jsonObject = JSONObject(json)
         val map = mutableMapOf<String, Any>()
-        jsonObject.keys().forEach { key ->
-            map[key] = jsonObject.get(key)
-        }
+        jsonObject.keys().forEach { key -> map[key] = jsonObject.get(key) }
         return map
     }
 
@@ -25,7 +23,11 @@ class LiveActivityFirebaseMessagingService : FirebaseMessagingService() {
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
-        val liveActivityManager = LiveActivityManagerHolder.instance!!
+        val liveActivityManager = LiveActivityManagerHolder.instance
+        if (liveActivityManager == null) {
+            Log.e("LiveActivityFirebaseMessagingService", "LiveActivityManagerHolder.instance is null — ignoring push")
+            return
+        }
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -33,28 +35,25 @@ class LiveActivityFirebaseMessagingService : FirebaseMessagingService() {
                 val event = args["event"] as String
                 val data = jsonDecode(args["content-state"] ?: "{}")
                 val id = args["activity-id"] as String
-                val timestamp =
-                    (args["timestamp"] as? String)?.toLongOrNull() ?: 0L
+                val tag = args["activity-tag"] as String?
+                val timestamp = (args["timestamp"] as? String)?.toLongOrNull() ?: 0L
 
                 when (event) {
                     "update" -> {
-                        liveActivityManager.updateActivity(id, timestamp, data)
+                        liveActivityManager.updateActivity(id, tag, timestamp, data)
                     }
-
                     "end" -> {
-                        liveActivityManager.endActivity(id, data)
+                        liveActivityManager.endActivity(id, tag, data)
                     }
-
                     else -> {
                         throw IllegalArgumentException("Unknown event type: $event")
                     }
                 }
-
             } catch (e: Exception) {
                 Log.e(
-                    "LiveActivityFirebaseMessagingService",
-                    "Error while parsing or processing FCM",
-                    e
+                        "LiveActivityFirebaseMessagingService",
+                        "Error while parsing or processing FCM",
+                        e
                 )
             }
         }

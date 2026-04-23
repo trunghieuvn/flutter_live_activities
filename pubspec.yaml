@@ -1,12 +1,12 @@
 name: live_activities
 description: Support iOS Live Activities, Android RemoteViews and iPhone's Dynamic Island.
-version: 2.4.2
+version: 2.4.9
 homepage: https://dimitridessus.fr/
 repository: https://github.com/istornz/live_activities
 
 environment:
-  sdk: '>=3.0.3 <4.0.0'
-  flutter: ">=2.5.0"
+  sdk: ^3.11.0
+  flutter: ">=3.41.0"
 
 screenshots:
   - description: 'Display a live activity on the iPhone 14 Pro+ dynamic island.'
@@ -26,6 +26,7 @@ dependencies:
   plugin_platform_interface: ^2.1.8
   flutter_app_group_directory: ^1.1.0
   path_provider: ^2.1.5
+  permission_handler: ^12.0.1
   image: ^4.5.4
 
 dev_dependencies:
@@ -39,5 +40,5 @@ flutter:
       ios:
         pluginClass: LiveActivitiesPlugin
       android:
-        package: com.example.live_activities
+        package: com.istornz.live_activities
         pluginClass: LiveActivitiesPlugin

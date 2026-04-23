@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:live_activities/live_activities_platform_interface.dart';
 import 'package:live_activities/models/activity_update.dart';
@@ -5,6 +7,7 @@ import 'package:live_activities/models/alert_config.dart';
 import 'package:live_activities/models/live_activity_state.dart';
 import 'package:live_activities/models/url_scheme_data.dart';
 import 'package:live_activities/services/app_groups_file_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class LiveActivities {
   final AppGroupsFileService _appGroupsFileService = AppGroupsFileService();
@@ -12,10 +15,25 @@ class LiveActivities {
   /// This is required to initialize the plugin.
   /// Create an App Group inside "Runner" target & "Extension" in Xcode.
   /// Be sure to set the *SAME* App Group in both targets.
+  ///
   /// [urlScheme] is optional and is the scheme sub-component of the URL.
+  ///
   /// [appGroupId] is the App Group identifier.
-  Future init({required String appGroupId, String? urlScheme}) {
+  ///
+  /// On Android, if [requestAndroidNotificationPermission] is true, the plugin will request notification permission upon initialization.
+  /// It's not required on iOS as live activities do not need explicit permission.
+  Future init({
+    required String appGroupId,
+    String? urlScheme,
+    bool requestAndroidNotificationPermission = true,
+  }) async {
     _appGroupsFileService.init(appGroupId: appGroupId);
+
+    if (Platform.isAndroid && requestAndroidNotificationPermission) {
+      // Request notification permission on Android
+      await Permission.notification.request();
+    }
+
     return LiveActivitiesPlatform.instance.init(
       appGroupId,
       urlScheme: urlScheme,
@@ -31,10 +49,16 @@ class LiveActivities {
   /// [StaleIn] indicates if a StaleDate should be added to the activity. If the value is null or the Duration
   /// is less than 1 minute then no staleDate will be used. The parameter only affects the live activity on
   /// iOS 16.2+ and does nothing on on iOS 16.1
+  ///
+  /// [iOSEnableRemoteUpdates] indicates if the live activity should allow remote updates via push notifications.
+  /// Default is true. If set to false, the live activity will not receive remote updates.
+  /// If set to true, Push Notifications capability must be enabled in your Xcode project.
   Future<String?> createActivity(
     String activityId,
     Map<String, dynamic> data, {
+    String? activityTag,
     bool removeWhenAppIsKilled = false,
+    bool iOSEnableRemoteUpdates = true,
     Duration? staleIn,
   }) async {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
@@ -42,8 +66,10 @@ class LiveActivities {
     }
     return LiveActivitiesPlatform.instance.createActivity(
       activityId,
+      activityTag,
       data,
       removeWhenAppIsKilled: removeWhenAppIsKilled,
+      iOSEnableRemoteUpdates: iOSEnableRemoteUpdates,
       staleIn: staleIn,
     );
   }
@@ -52,33 +78,48 @@ class LiveActivities {
   /// You can get an activity id by calling [createActivity].
   /// Data is a map of key/value pairs that will be transmitted to your iOS extension widget.
   /// Map is limited to String keys and values for now.
-  Future updateActivity(String activityId, Map<String, dynamic> data,
-      [AlertConfig? alertConfig]) async {
+  Future updateActivity(
+    String activityId,
+    Map<String, dynamic> data, {
+    String? activityTag,
+    AlertConfig? alertConfig,
+  }) async {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       await _appGroupsFileService.sendFilesToAppGroups(data);
     }
-    return LiveActivitiesPlatform.instance
-        .updateActivity(activityId, data, alertConfig);
+    return LiveActivitiesPlatform.instance.updateActivity(
+      activityId,
+      activityTag,
+      data,
+      alertConfig,
+    );
   }
 
   Future createOrUpdateActivity(
     String activityId,
     Map<String, dynamic> data, {
+    String? activityTag,
     bool removeWhenAppIsKilled = false,
+    bool iOSEnableRemoteUpdates = true,
     Duration? staleIn,
   }) async {
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       await _appGroupsFileService.sendFilesToAppGroups(data);
     }
     return LiveActivitiesPlatform.instance.createOrUpdateActivity(
-        activityId, data,
-        removeWhenAppIsKilled: removeWhenAppIsKilled, staleIn: staleIn);
+      activityId,
+      activityTag,
+      data,
+      removeWhenAppIsKilled: removeWhenAppIsKilled,
+      iOSEnableRemoteUpdates: iOSEnableRemoteUpdates,
+      staleIn: staleIn,
+    );
   }
 
   /// End an iOS 16.1+ live activity.
   /// You can get an activity id by calling [createActivity].
-  Future endActivity(String activityId) {
-    return LiveActivitiesPlatform.instance.endActivity(activityId);
+  Future endActivity(String activityId, {String? activityTag}) {
+    return LiveActivitiesPlatform.instance.endActivity(activityId, activityTag);
   }
 
   /// Get the activity state.

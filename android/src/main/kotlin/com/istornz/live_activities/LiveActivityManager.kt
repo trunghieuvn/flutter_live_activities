@@ -1,4 +1,4 @@
-package com.example.live_activities
+package com.istornz.live_activities
 
 import android.util.Log
 import android.app.Notification
@@ -6,12 +6,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationManagerCompat
 import java.math.BigInteger
 import java.security.MessageDigest
 
 open class LiveActivityManager(private val context: Context) {
-    private val liveActivitiesMap = mutableMapOf<Int, Long>()
     private var channelName: String = "Live Activities"
 
     open suspend fun buildNotification(
@@ -25,7 +25,7 @@ open class LiveActivityManager(private val context: Context) {
     private fun createNotificationChannel(
         channelName: String,
         channelDescription: String,
-        channelImportance: Int = NotificationManager.IMPORTANCE_LOW,
+        channelImportance: Int = NotificationManager.IMPORTANCE_HIGH,
     ) {
         this.channelName = channelName
         val existingChannel =
@@ -36,8 +36,6 @@ open class LiveActivityManager(private val context: Context) {
             val channel = NotificationChannel(
                 channelName, channelDescription, channelImportance
             ).apply {
-                setSound(null, null)
-                enableVibration(false)
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
@@ -45,6 +43,16 @@ open class LiveActivityManager(private val context: Context) {
             val notificationManager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    // Safely calls getActiveNotifications(), returning an empty array if the system server is dead.
+    private fun NotificationManager.safeGetActiveNotifications(): Array<StatusBarNotification> {
+        return try {
+            getActiveNotifications()
+        } catch (e: Exception) {
+            Log.e("LiveActivityManager", "Failed to get active notifications: ${e.message}")
+            emptyArray()
         }
     }
 
@@ -64,19 +72,20 @@ open class LiveActivityManager(private val context: Context) {
             data["liveActivityChannelDescription"] as? String
                 ?: "Live Activities Notifications"
 
-
         createNotificationChannel(
             liveActivityChannelName, liveActivityChannelDescription
         )
     }
 
     suspend fun createActivity(
-        id: String,
-        timestamp: Long, data: Map<String, Any>
+        activityId: String,
+        activityTag: String?,
+        timestamp: Long,
+        data: Map<String, Any>
     ): String? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null;
 
-        val activityId = getNotificationIdFromString(id)
+        val notificationId = getNotificationIdFromString(activityId)
 
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -85,12 +94,13 @@ open class LiveActivityManager(private val context: Context) {
             NotificationManagerCompat.from(context).areNotificationsEnabled()
 
         if (areNotificationsEnabled) {
+            val builder = Notification.Builder(context, channelName)
+            builder.extras.putLong("activity_timestamp", timestamp)
+
             notificationManager.notify(
-                activityId, buildNotification(
-                    Notification.Builder(context, channelName),
-                    "create",
-                    data,
-                )
+                activityTag,
+                notificationId,
+                buildNotification(builder, "create", data)
             )
         } else {
             Log.w(
@@ -100,40 +110,79 @@ open class LiveActivityManager(private val context: Context) {
             return null
         }
 
-        liveActivitiesMap[activityId] = timestamp
-        return id
+        return activityId
+    }
+
+    suspend fun createOrUpdateActivity(
+        activityId: String,
+        activityTag: String?,
+        timestamp: Long,
+        data: Map<String, Any>
+    ): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
+
+        val notificationId = getNotificationIdFromString(activityId)
+
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val existingNotification = notificationManager.safeGetActiveNotifications()
+            .firstOrNull {
+                it.id == notificationId &&
+                it.notification.channelId == channelName
+            }
+
+        if (existingNotification != null) {
+            updateActivity(activityId, activityTag, timestamp, data)
+            return activityId
+        } else {
+            return createActivity(activityId, activityTag, timestamp, data)
+        }
     }
 
     suspend fun updateActivity(
-        id: String,
+        activityId: String,
+        activityTag: String?,
         timestamp: Long,
         data: Map<String, Any>
     ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
-        val activityId = getNotificationIdFromString(id)
-
-        if (liveActivitiesMap.containsKey(activityId) && liveActivitiesMap[activityId] ?: 0L >= timestamp) {
-            Log.w(
-                "LiveActivityManager",
-                "Attempted to update activity with ID $id but the timestamp is not newer than the existing one."
-            )
-            return
-        }
+        val notificationId = getNotificationIdFromString(activityId)
 
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Check if existing notification has a newer or equal timestamp
+        val existingNotification = notificationManager.safeGetActiveNotifications()
+            .firstOrNull {
+                it.id == notificationId &&
+                it.notification.channelId == channelName
+            }
+
+        val existingTimestamp = existingNotification?.notification?.extras?.getLong("activity_timestamp") ?: 0L
+        if (existingTimestamp >= timestamp) {
+            Log.w(
+                "LiveActivityManager",
+                "Attempted to update activity with ID $activityId but the timestamp is not newer than the existing one."
+            )
+            return
+        }
 
         val areNotificationsEnabled =
             NotificationManagerCompat.from(context).areNotificationsEnabled()
 
         if (areNotificationsEnabled) {
+            val builder = Notification.Builder(context, channelName)
+            builder.extras.putLong("activity_timestamp", timestamp)
+            // setOnlyAlertOnce(true): since the notification ID already exists,
+            // Android will not re-trigger sound, vibration, or heads-up on this update.
+            builder.setOnlyAlertOnce(true)
+
             notificationManager.notify(
-                activityId, buildNotification(
-                    Notification.Builder(context, channelName),
-                    "update",
-                    data
-                )
+                activityTag,
+                notificationId,
+                buildNotification(builder, "update", data)
             )
         } else {
             Log.w(
@@ -142,23 +191,21 @@ open class LiveActivityManager(private val context: Context) {
             )
             return
         }
-
-        liveActivitiesMap[activityId] = timestamp
     }
 
     fun endActivity(
-        id: String,
+        activityId: String,
+        activityTag: String?,
         data: Map<String, Any>
     ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
 
-        val activityId = getNotificationIdFromString(id)
+        val notificationId = getNotificationIdFromString(activityId)
 
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        notificationManager.cancel(activityId)
-        liveActivitiesMap.remove(activityId)
+        notificationManager.cancel(activityTag, notificationId)
     }
 
     fun endAllActivities(data: Map<String, Any>) {
@@ -167,16 +214,28 @@ open class LiveActivityManager(private val context: Context) {
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        for (activityId in liveActivitiesMap.keys.toList()) {
-            notificationManager.cancel(activityId)
-            liveActivitiesMap.remove(activityId)
-        }
+        notificationManager.safeGetActiveNotifications()
+            .filter { statusBarNotification ->
+                statusBarNotification.notification.channelId == channelName
+            }
+            .forEach { statusBarNotification ->
+                notificationManager.cancel(statusBarNotification.tag, statusBarNotification.id)
+            }
     }
 
-    fun getAllActivitiesIds(data: Map<String, Any>): List<Int> {
+    fun getAllActivitiesIds(data: Map<String, Any>): List<String> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return emptyList()
 
-        return liveActivitiesMap.keys.toList()
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        return notificationManager.safeGetActiveNotifications()
+            .filter { statusBarNotification ->
+                statusBarNotification.notification.channelId == channelName
+            }
+            .mapNotNull { statusBarNotification ->
+                statusBarNotification.tag
+            }
     }
 
     fun areActivitiesSupported(data: Map<String, Any>): Boolean {

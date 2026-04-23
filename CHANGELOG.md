@@ -1,3 +1,52 @@
+## 2.4.9
+- 🐛 Improve initialization logic.
+
+## 2.4.8
+- 🐛 Fix example app which was not working anymore.
+- ✨ Bump minimal Flutter SDK version to 3.41.0.
+
+## 2.4.7
+
+- 🐛 Fix UIScene iOS adoption.
+- ✨ Introduce optional `activityTag` parameter to activity methods and update Android notification ID generation to consistently use `activityId` (thanks to @Dansp 👍).
+
+## 2.4.6
+
+- 🐛 Implement `createOrUpdateActivity` for Android.
+
+## 2.4.5
+
+- 🐛 Fix `removeWhenAppIsKilled` in release mode.
+
+## 2.4.4
+
+- ✨ Implement Android notification request by the plugin
+- ✨ Add an option to disable iOS remote push update.
+
+Eg.
+
+```dart
+createActivity(
+  ...
+  iOSEnableRemoteUpdates: false, // default is true
+);
+createOrUpdateActivity(
+  ...
+  iOSEnableRemoteUpdates: false, // default is true
+);
+```
+
+- 🐛 Disable iOS push notification request as not needed for live activities.
+
+## 2.4.3
+
+- 🏗️ Migrating to UISceneDelegate (Flutter 3.38.x iOS breaking change).
+- 🏗️ Default SDK environment is now 3.10.0 and Flutter SDK >= 3.38.0.
+- 🏗️ Fix compile error Android example project (thanks to @trunghieuvn 👍).
+- ✨🐛 (Android) Store notification IDs on app termination and return string IDs to Dart (thanks to @felixibel 👍).
+- ✨ Add support for `getActivityState()` to detect activity by custom activity id (thanks to @reynirf 👍).
+- ✨ Add option to control iOS notification permission request (thanks to @asmz 👍).
+
 ## 2.4.2
 
 - ✨ New method `areActivitiesSupported()` ➡️ Check if live activities are supported on the current platform/OS version. (thanks to @MortadhaFadhlaoui 👍).

@@ -16,7 +16,7 @@ class AppGroupsFileService {
   final List<String> _assetsCopiedInAppGroups = [];
 
   /// Initialize the service with the app group id
-  init({required String appGroupId}) {
+  void init({required String appGroupId}) {
     _appGroupId = appGroupId;
   }
 
@@ -84,8 +84,6 @@ class AppGroupsFileService {
   Future<Directory> _liveActivitiesFilesDirectory() async {
     final appGroupDirectory =
         await FlutterAppGroupDirectory.getAppGroupDirectory(_appGroupId!);
-    return Directory(
-      '${appGroupDirectory!.path}/$kFileFolderName',
-    );
+    return Directory('${appGroupDirectory!.path}/$kFileFolderName');
   }
 }

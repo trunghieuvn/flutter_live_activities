@@ -183,7 +183,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.engine.FlutterEngine
 
-import com.example.live_activities.LiveActivityManagerHolder
+import com.istornz.live_activities.LiveActivityManagerHolder
 
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -210,7 +210,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
-import com.example.live_activities.LiveActivityManager
+import com.istornz.live_activities.LiveActivityManager
 
 class CustomLiveActivityManager(context: Context) :
     LiveActivityManager(context) {
@@ -612,6 +612,7 @@ Link(destination: URL(string: "la://my.app/order?=123")!) { // Replace "la" with
 _liveActivitiesPlugin.init(
   appGroupId: 'your.group.id', // replace here with your custom app group id
   urlScheme: 'str' // replace here with your custom app scheme
+  requestAndroidNotificationPermission: true, // optional, true by default, disable this if you want to handle notification permission by yourself
 );
 ```
 
@@ -699,6 +700,20 @@ _liveActivitiesPlugin.pushToStartTokenUpdateStream.listen((String token) {
 });
 ```
 
+> NOTE: You can disable remote updates over push by setting `iOSEnableRemoteUpdates` to
+> `false` when creating or updating an activity. This will prevent the activity
+> from being updated via push notifications.
+```dart
+createActivity(
+  ...
+  iOSEnableRemoteUpdates: false, // default is true
+);
+createOrUpdateActivity(
+  ...
+  iOSEnableRemoteUpdates: false, // default is true
+);
+```
+
 ## Server Implementation
 
 On your server, you'll need to send a push notification with the following
@@ -714,6 +729,7 @@ FCM example payload :
     "event": eventType,                 // Required, can be "start", "update" or "end"
     "content-state": JSON.stringify({   // Dynamic data to be passed to the Live Activity, must be stringified
     "activity-id": "live_activity_id",  // Required, it must be a String, you should use a something like match.id
+    "activity-tag": "live_activity_tag",  // Optional, it must be a String, you should use a something like match.tag
     "teamAName": "Team A",
     "teamBName": "Team B",
     "teamAScore": 0,
